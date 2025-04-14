@@ -57,7 +57,6 @@ load_dotenv()
 HUGGINGFACE_TOKEN = os.environ.get('HUGGINGFACE_TOKEN')
 
 # Client for LLM inference
-client1 = InferenceClient(model="google/flan-t5-large", token=HUGGINGFACE_TOKEN)
 client = InferenceClient(
     model="mistralai/Mistral-7B-Instruct-v0.1",
     token=HUGGINGFACE_TOKEN
