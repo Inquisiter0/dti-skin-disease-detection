@@ -7,4 +7,4 @@ torch==2.1.0+cpu  # or torch==2.0.1 if you are using a different version
 Werkzeug==2.2.2
 Flask-SQLAlchemy==2.5.1
 python-dotenv==0.19.2
-
+gunicorn
