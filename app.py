@@ -579,8 +579,8 @@ def ask():
         {
             "role": "user",
             "content": f"""A user may have {condition}. They asked in {language}: '{question}'. 
-            Detect the language of the question and respond in the SAME LANGUAGE as the question.
-            Respond like a helpful AI medical assistant. Keep your response focused on the question.Kepp
+            Keep it professional don't use causal tone.
+            Respond like a helpful AI medical assistant. Keep your response focused on the question.Keep
             it 3-4 sentences long.
             Provide a concise answer, avoiding unnecessary details.
             If the question is not clear, ask for clarification.No need to tell the language of the question.
