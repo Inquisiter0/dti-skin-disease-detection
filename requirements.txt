@@ -3,7 +3,7 @@ authlib==1.0.0
 transformers==4.51.1
 huggingface-hub==0.12.1
 Pillow==9.2.0
-torch==2.1.0+cpu  # or torch==2.0.1 if you are using a different version
+torch==2.6.0+cpu  # or torch==2.0.1 if you are using a different version
 Werkzeug==2.2.2
 Flask-SQLAlchemy==2.5.1
 python-dotenv==0.19.2
