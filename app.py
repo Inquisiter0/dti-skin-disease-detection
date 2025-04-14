@@ -71,7 +71,7 @@ skin_client = InferenceClient(
 # =======================================
 # 🔍 Google OAuth Configuration
 # =======================================
-app.config['SERVER_NAME'] = 'localhost:5000'
+#app.config['SERVER_NAME'] = 'localhost:5000' for local use
 app.config['GOOGLE_CLIENT_ID'] = os.environ.get('GOOGLE_CLIENT_ID')
 app.config['GOOGLE_CLIENT_SECRET'] = os.environ.get('GOOGLE_CLIENT_SECRET')
 
