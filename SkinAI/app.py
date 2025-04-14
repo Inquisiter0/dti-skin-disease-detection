@@ -21,7 +21,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)  # Session lasts fo
 # 📊 Database Configuration
 # =======================================
 # Replace with your actual PostgreSQL credentials when deploying
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://super:system123@localhost/skinai_db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
