@@ -1,10 +1,8 @@
 from flask import Flask, request, jsonify, render_template, send_from_directory, redirect, url_for, session, flash
 import traceback
 from authlib.integrations.flask_client import OAuth
-from transformers import AutoModelForImageClassification, AutoImageProcessor
 from huggingface_hub import InferenceClient
 from PIL import Image
-import torch
 import os
 import secrets
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -55,18 +53,25 @@ class Analysis(db.Model):
 # =======================================
 # 🔐 Hugging Face LLM Token + InferenceClient
 # =======================================
+load_dotenv()
 HUGGINGFACE_TOKEN = os.environ.get('HUGGINGFACE_TOKEN')
-client1 = InferenceClient(model="google/flan-t5-large", token= HUGGINGFACE_TOKEN)
+
+# Client for LLM inference
+client1 = InferenceClient(model="google/flan-t5-large", token=HUGGINGFACE_TOKEN)
 client = InferenceClient(
     model="mistralai/Mistral-7B-Instruct-v0.1",
     token=HUGGINGFACE_TOKEN
 )
 
+# Client for image classification - using provider for API access
+skin_client = InferenceClient(
+    provider="hf-inference",
+    api_key=HUGGINGFACE_TOKEN
+)
 
 # =======================================
 # 🔍 Google OAuth Configuration
 # =======================================
-load_dotenv()
 app.config['SERVER_NAME'] = 'localhost:5000'
 app.config['GOOGLE_CLIENT_ID'] = os.environ.get('GOOGLE_CLIENT_ID')
 app.config['GOOGLE_CLIENT_SECRET'] = os.environ.get('GOOGLE_CLIENT_SECRET')
@@ -81,14 +86,8 @@ google = oauth.register(
 )
 
 # =======================================
-# 🧠 Load Skin Disease Model
+# 📚 Skin Disease Class Labels
 # =======================================
-print("Loading skin condition classifier...")
-model_name = "Jayanth2002/dinov2-base-finetuned-SkinDisease"
-image_model = AutoModelForImageClassification.from_pretrained(model_name)
-processor = AutoImageProcessor.from_pretrained(model_name)
-
-# Class labels
 class_names = [
     'Basal Cell Carcinoma', 'Darier_s Disease', 'Epidermolysis Bullosa Pruriginosa',
     'Hailey-Hailey Disease', 'Herpes Simplex', 'Impetigo', 'Larva Migrans',
@@ -177,8 +176,6 @@ def view_result(analysis_id):
     analysis_data['image_path'] = analysis.image_path  # Add image path which might not be in to_dict()
     
     return render_template("result.html", analysis=analysis_data)
-
-# Fixed download-report function in app.py
 
 @app.route("/download-report/<int:analysis_id>")
 def download_report(analysis_id):
@@ -286,7 +283,7 @@ def download_report(analysis_id):
             p.drawString(70, y_position, "Image could not be included in this report.")
             y_position -= 20
 
-        # Disclaimer (finally added here)
+        # Disclaimer
         y_position = max(100, y_position - 40)
         p.setFont("Helvetica-Bold", 12)
         p.drawString(50, y_position, "Disclaimer:")
@@ -362,7 +359,6 @@ def login():
 #========================================
 @app.route('/login/google')
 def google_login():
-    # This must generate exactly "http://localhost:5000/login/google/authorized"
     redirect_uri = url_for('google_callback', _external=True)
     print(f"Redirecting to: {redirect_uri}")  # Debug output
     return google.authorize_redirect(redirect_uri)
@@ -451,7 +447,7 @@ def logout():
     return redirect(url_for('login'))
 
 # =======================================
-# 📸 /analyze Route
+# 📸 /analyze Route - MODIFIED TO USE INFERENCE API
 # =======================================
 @app.route('/analyze', methods=['POST'])
 def analyze():
@@ -469,94 +465,103 @@ def analyze():
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     image_file.save(filepath)
     
-    # Process with AI model
-    image = Image.open(filepath).convert("RGB")
-    inputs = processor(images=image, return_tensors="pt")
-
-    with torch.no_grad():
-        logits = image_model(**inputs).logits
-        probs = torch.softmax(logits, dim=-1)[0]
-
-    top_idx = torch.argmax(probs).item()
-    top_conf = probs[top_idx].item()
-    prediction = class_names[top_idx]
-
-    top_conditions = sorted(
-        zip(class_names, probs.tolist()),
-        key=lambda x: x[1],
-        reverse=True
-    )[:5]
-
-    # Get detailed condition description from Mistral model
-    description = ""
-    recommendations = []
     try:
-        # Create prompts for description and recommendations
-        description_prompt = f"Describe {prediction} in 2-3 simple sentences as if explaining to a patient. Include basic symptoms and general information."
-        
-        recommendations_prompt = f"Provide 3-4 specific recommendations for someone who might have {prediction}. Include advice about when to see a doctor and what self-care might be appropriate. Format as a simple bullet list."
-        
-        # Get description
-        messages_description = [{"role": "user", "content": description_prompt}]
-        response_description = client.chat_completion(
-            messages=messages_description,
-            max_tokens=100
+        # Process with Hugging Face Inference API
+        # The model is accessed via API instead of loading it locally
+        result = skin_client.image_classification(
+            filepath, 
+            model="Jayanth2002/dinov2-base-finetuned-SkinDisease"
         )
-        description = response_description.choices[0]["message"]["content"].strip()
         
-        # Get recommendations
-        messages_recommendations = [{"role": "user", "content": recommendations_prompt}]
-        response_recommendations = client.chat_completion(
-            messages=messages_recommendations,
-            max_tokens=150
-        )
-        rec_text = response_recommendations.choices[0]["message"]["content"].strip()
+        # Extract results
+        # The API returns a list of label/score pairs
+        scores = [(item['label'], item['score']) for item in result]
         
-        recommendations = [line.strip().replace('- ', '') for line in rec_text.split('\n') if line.strip()]
-        if not recommendations:
+        # Sort by score (highest first)
+        scores.sort(key=lambda x: x[1], reverse=True)
+        
+        # Get top prediction
+        top_prediction = scores[0][0]
+        top_confidence = scores[0][1]
+        
+        # Get top 5 conditions
+        top_conditions = scores[:5]
+        
+        # Get detailed condition description from Mistral model
+        description = ""
+        recommendations = []
+        try:
+            # Create prompts for description and recommendations
+            description_prompt = f"Describe {top_prediction} in 2-3 simple sentences as if explaining to a patient. Include basic symptoms and general information."
+            
+            recommendations_prompt = f"Provide 3-4 specific recommendations for someone who might have {top_prediction}. Include advice about when to see a doctor and what self-care might be appropriate. Format as a simple bullet list."
+            
+            # Get description
+            messages_description = [{"role": "user", "content": description_prompt}]
+            response_description = client.chat_completion(
+                messages=messages_description,
+                max_tokens=100
+            )
+            description = response_description.choices[0]["message"]["content"].strip()
+            
+            # Get recommendations
+            messages_recommendations = [{"role": "user", "content": recommendations_prompt}]
+            response_recommendations = client.chat_completion(
+                messages=messages_recommendations,
+                max_tokens=150
+            )
+            rec_text = response_recommendations.choices[0]["message"]["content"].strip()
+            
+            recommendations = [line.strip().replace('- ', '') for line in rec_text.split('\n') if line.strip()]
+            if not recommendations:
+                recommendations = [
+                    "Take a clearer image if unsure.",
+                    "Consider visiting a dermatologist.",
+                    "Avoid self-diagnosis or self-treatment."
+                ]
+            
+        except Exception as e:
+            print(f"Error getting information from model: {str(e)}")
+            description = f"{top_prediction} is a skin condition. Please consult a medical professional."
             recommendations = [
                 "Take a clearer image if unsure.",
                 "Consider visiting a dermatologist.",
                 "Avoid self-diagnosis or self-treatment."
             ]
-            
-    except Exception as e:
-        print(f"Error getting information from model: {str(e)}")
-        description = f"{prediction} is a skin condition. Please consult a medical professional."
-        recommendations = [
-            "Take a clearer image if unsure.",
-            "Consider visiting a dermatologist.",
-            "Avoid self-diagnosis or self-treatment."
-        ]
 
-    # Save analysis to database
-    new_analysis = Analysis(
-        user_id=user_id,
-        image_path=os.path.join('uploads', filename),
-        prediction=prediction,
-        confidence=round(top_conf, 4)
-    )
-    
-    try:
-        db.session.add(new_analysis)
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        print(f"Database error: {str(e)}")
+        # Save analysis to database
+        new_analysis = Analysis(
+            user_id=user_id,
+            image_path=os.path.join('uploads', filename),
+            prediction=top_prediction,
+            confidence=top_confidence
+        )
+        
+        try:
+            db.session.add(new_analysis)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Database error: {str(e)}")
 
-    return jsonify({
-        "analysis_id": new_analysis.id,
-        "prediction": prediction,
-        "confidence": round(top_conf, 4),
-        "topConditions": [(name, round(prob, 4)) for name, prob in top_conditions],
-        "description": description,
-        "recommendations": recommendations,
-        "image_path": os.path.join('static', 'uploads', filename)
-    })
+        return jsonify({
+            "analysis_id": new_analysis.id,
+            "prediction": top_prediction,
+            "confidence": top_confidence,
+            "topConditions": [(name, score) for name, score in top_conditions],
+            "description": description,
+            "recommendations": recommendations,
+            "image_path": os.path.join('static', 'uploads', filename)
+        })
+        
+    except Exception as e:
+        print(f"Error analyzing image: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": f"Analysis failed: {str(e)}"}), 500
+
 # =======================================
 # 💬 /ask Route
 # =======================================
-# Modified /ask route in app.py
 @app.route('/ask', methods=['POST'])
 def ask():
     if not session.get('logged_in'):
@@ -576,7 +581,10 @@ def ask():
             "role": "user",
             "content": f"""A user may have {condition}. They asked in {language}: '{question}'. 
             Detect the language of the question and respond in the SAME LANGUAGE as the question.
-            Respond like a helpful AI medical assistant. Keep your response focused on the question.
+            Respond like a helpful AI medical assistant. Keep your response focused on the question.Kepp
+            it 3-4 sentences long.
+            Provide a concise answer, avoiding unnecessary details.
+            If the question is not clear, ask for clarification.No need to tell the language of the question.
             """
         }
     ]
