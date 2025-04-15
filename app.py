@@ -58,6 +58,7 @@ HUGGINGFACE_TOKEN = os.environ.get('HUGGINGFACE_TOKEN')
 
 # Client for LLM inference
 client = InferenceClient(
+    provider="hf-inference",
     model="mistralai/Mistral-7B-Instruct-v0.1",
     token=HUGGINGFACE_TOKEN
 )
