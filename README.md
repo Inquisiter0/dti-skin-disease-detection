@@ -21,7 +21,6 @@ Skin conditions are widespread and can go undiagnosed for too long, especially i
 
 
 
- ⚙️ Tech Stack
 ### ⚙️ **Tech Stack**
 
 | Component          | Technology                                                          |
