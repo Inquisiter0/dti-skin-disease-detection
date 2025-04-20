@@ -22,13 +22,15 @@ Skin conditions are widespread and can go undiagnosed for too long, especially i
 
 
  ⚙️ Tech Stack
-Component | Technology
-Backend | Python (Flask), OpenCV, PyTorch
-Frontend | HTML, CSS, JavaScript
-ML Model | Vision Transformer (ViT) fine-tuned using DINOv2 on ISIC dataset
-Authentication | Google OAuth 2.0 via Flask-OAuthlib
-Report Export | ReportLab (Python library for generating PDFs server-side)
+### ⚙️ **Tech Stack**
 
+| Component          | Technology                                                          |
+|--------------------|---------------------------------------------------------------------|
+| **Backend**         | Python (Flask), OpenCV, PyTorch                                    |
+| **Frontend**        | HTML, CSS, JavaScript                                              |
+| **ML Model**        | Vision Transformer (ViT) fine-tuned using DINOv2 on ISIC dataset   |
+| **Authentication**  | Google OAuth 2.0 via `Flask-OAuthlib`                              |
+| **Report Export**   | `ReportLab` (Python library for generating PDFs server-side)       |
 
 
 
