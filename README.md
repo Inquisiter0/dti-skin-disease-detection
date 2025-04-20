@@ -29,7 +29,7 @@ Skin conditions are widespread and can go undiagnosed for too long, especially i
 | **Frontend**    | HTML, CSS, JavaScript               |
 | **ML Model**    | Vision Transformer (ViT) fine-tuned using DINOv2 on ISIC dataset |
 | **Authentication** | Google Sign-In via Firebase Auth |
-| **Report Export**  | jsPDF / html2canvas               |
+| **Report Export**  | Reportslab           |
 
 
 
